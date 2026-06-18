@@ -1,55 +1,51 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Depends
 from fastapi.middleware.cors import CORSMiddleware
+import cloudinary
+import cloudinary.uploader
+import database, models
+from database import engine, SessionLocal
 from sqlalchemy.orm import Session
-import models, schemas
-from database import get_db, engine
 
-# Nos aseguramos de que las tablas existan
+# --- CONFIGURA TUS DATOS DE CLOUDINARY AQUÍ ---
+cloudinary.config(
+  cloud_name = "TU_CLOUD_NAME",
+  api_key = "TU_API_KEY",
+  api_secret = "TU_API_SECRET"
+)
+
 models.Base.metadata.create_all(bind=engine)
+app = FastAPI()
 
-app = FastAPI(
-    title="API Investigación",
-    description="Sistema de gestión para portafolio de investigaciones personales",
-    version="1.0.0"
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# Configuración de CORS para permitir la conexión desde el frontend local
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+def get_db():
+    db = SessionLocal()
+    try: yield db
+    finally: db.close()
 
-# Ruta base de prueba
-@app.get("/")
-def ruta_principal():
-    return {"mensaje": "El servidor está funcionando correctamente"}
+@app.post("/investigaciones/")
+async def create_investigacion(
+    titulo: str = Form(...),
+    autor: str = Form(...),
+    resumen: str = Form(...),
+    linea_investigacion: str = Form(...),
+    file: UploadFile = File(None), # El archivo es opcional
+    db: Session = Depends(get_db)
+):
+    file_url = None
+    if file:
+        # Subir a Cloudinary
+        result = cloudinary.uploader.upload(file.file, resource_type="auto")
+        file_url = result.get("secure_url")
 
-# 1. Ruta para CREAR una investigación (POST)
-@app.post("/investigaciones/", response_model=schemas.InvestigacionResponse)
-def crear_investigacion(investigacion: schemas.InvestigacionCreate, db: Session = Depends(get_db)):
-    nueva_investigacion = models.Investigacion(**investigacion.model_dump())
-    db.add(nueva_investigacion)
+    new_inv = models.Investigacion(
+        titulo=titulo, autor=autor, resumen=resumen, 
+        linea_investigacion=linea_investigacion, archivo_url=file_url
+    )
+    db.add(new_inv)
     db.commit()
-    db.refresh(nueva_investigacion)
-    return nueva_investigacion
+    return {"message": "Guardado"}
 
-# 2. Ruta para OBTENER todas las investigaciones (GET)
-@app.get("/investigaciones/", response_model=list[schemas.InvestigacionResponse])
-def listar_investigaciones(db: Session = Depends(get_db)):
-    investigaciones = db.query(models.Investigacion).all()
-    return investigaciones
-
-# 3. Ruta para ELIMINAR una investigación por ID (DELETE)
-@app.delete("/investigaciones/{investigacion_id}")
-def eliminar_investigacion(investigacion_id: int, db: Session = Depends(get_db)):
-    investigacion = db.query(models.Investigacion).filter(models.Investigacion.id == investigacion_id).first()
-    
-    if not investigacion:
-        raise HTTPException(status_code=404, detail="La investigación no existe")
-        
-    db.delete(investigacion)
-    db.commit()
-    return {"mensaje": f"Investigación con ID {investigacion_id} eliminada correctamente"}
+@app.get("/investigaciones/")
+def get_all(db: Session = Depends(get_db)):
+    return db.query(models.Investigacion).all()
