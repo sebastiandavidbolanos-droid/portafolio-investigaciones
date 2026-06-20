@@ -8,12 +8,11 @@ from sqlalchemy.orm import Session
 
 # --- CONFIGURA TUS DATOS DE CLOUDINARY AQUÍ ---
 cloudinary.config(
-  cloudinary.config(
     cloud_name = "dyztae4s3",
     api_key = "426115579511919",
     api_secret = "iF_wRp4nN9Y90CbJ2zzWvSOt1zk" 
 )
-)
+
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI()
