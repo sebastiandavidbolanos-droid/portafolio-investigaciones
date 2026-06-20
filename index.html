@@ -52,6 +52,15 @@
                     <h2 class="text-2xl font-semibold text-blue-800">${inv.titulo}</h2>
                     <p class="text-sm text-gray-500 italic mt-1">Autor: ${inv.autor} | Línea: ${inv.linea_investigacion}</p>
                     <p class="mt-4 text-gray-700 leading-relaxed">${inv.resumen}</p>
+                    
+                    ${inv.archivo_url ? `
+                        <div class="mt-5 pt-4 border-t border-gray-100">
+                            <img src="${inv.archivo_url}" alt="Imagen adjunta del proyecto" class="w-full h-auto max-h-96 object-cover rounded-md shadow-sm mb-4" onerror="this.style.display='none'">
+                            <a href="${inv.archivo_url}" target="_blank" class="inline-block bg-blue-50 text-blue-700 hover:bg-blue-100 font-semibold py-2 px-4 rounded-md transition duration-200 text-sm border border-blue-200">
+                                📄 Abrir archivo completo
+                            </a>
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
         }
