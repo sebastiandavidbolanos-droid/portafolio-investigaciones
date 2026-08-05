@@ -7,15 +7,41 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
-    <div class="max-w-4xl mx-auto p-8">
+
+    <!-- 1. MÓDULO DE LOGIN (Se muestra si no hay token de acceso) -->
+    <div id="seccion-login" class="max-w-md mx-auto mt-20 p-6 bg-white rounded-lg shadow-md border border-gray-200">
+        <h2 class="text-2xl font-bold text-center text-blue-900 mb-6">Acceso Administrativo</h2>
+        <form id="form-login" class="space-y-4">
+            <div>
+                <label class="block text-sm font-semibold text-gray-700">Usuario</label>
+                <input type="text" id="usuario" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-600 bg-gray-50">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-gray-700">Contraseña</label>
+                <input type="password" id="password" required class="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-600 bg-gray-50">
+            </div>
+            <p id="error-login" class="text-red-600 text-sm hidden font-semibold text-center">Usuario o contraseña incorrectos</p>
+            <button type="submit" class="w-full bg-blue-900 hover:bg-blue-800 text-white font-bold py-2 px-4 rounded-md transition duration-200">
+                Iniciar Sesión
+            </button>
+        </form>
+    </div>
+
+    <!-- 2. PANEL DE CONTROL (Se activa tras autenticarse con éxito) -->
+    <div id="seccion-admin" class="max-w-4xl mx-auto p-8 hidden">
         <header class="mb-10 flex justify-between items-center border-b pb-4 border-gray-200">
             <div>
                 <h1 class="text-3xl font-bold text-gray-800">Panel de Control</h1>
                 <p class="text-gray-500">Gestión exclusiva del portafolio científico</p>
             </div>
-            <a href="index.html" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md transition duration-200 text-sm">
-                Ver Sitio Público →
-            </a>
+            <div class="flex items-center gap-3">
+                <a href="index.html" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 rounded-md transition duration-200 text-sm">
+                    Ver Sitio Público →
+                </a>
+                <button onclick="cerrarSesion()" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md text-sm transition">
+                    Cerrar Sesión
+                </button>
+            </div>
         </header>
 
         <div class="bg-white p-6 rounded-lg shadow-md mb-10 border border-gray-200">
@@ -52,17 +78,61 @@
         </div>
 
         <h2 class="text-2xl font-bold text-gray-800 mb-4">Administrar Publicaciones Actuales</h2>
-        <div id="lista-investigaciones" class="space-y-6">
-            </div>
+        <div id="lista-investigaciones" class="space-y-6"></div>
     </div>
 
     <script>
-        const API_URL = 'https://portafolio-investigaciones.onrender.com/investigaciones/';
-        
-        // Cargar las investigaciones en el panel de administración
+        const API_BASE = 'https://portafolio-investigaciones.onrender.com';
+        let tokenAcceso = sessionStorage.getItem('token_admin');
+
+        // Control de vista
+        if (tokenAcceso) {
+            mostrarAdmin();
+        }
+
+        // PETICIÓN DE LOGIN
+        document.getElementById('form-login').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('username', document.getElementById('usuario').value);
+            formData.append('password', document.getElementById('password').value);
+
+            try {
+                const respuesta = await fetch(`${API_BASE}/token`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (respuesta.ok) {
+                    const datos = await respuesta.json();
+                    tokenAcceso = datos.access_token;
+                    sessionStorage.setItem('token_admin', tokenAcceso);
+                    document.getElementById('error-login').classList.add('hidden');
+                    mostrarAdmin();
+                } else {
+                    document.getElementById('error-login').classList.remove('hidden');
+                }
+            } catch (error) {
+                alert('Error al conectar con el servidor de autenticación');
+            }
+        });
+
+        function mostrarAdmin() {
+            document.getElementById('seccion-login').classList.add('hidden');
+            document.getElementById('seccion-admin').classList.remove('hidden');
+            cargarInvestigaciones();
+        }
+
+        function cerrarSesion() {
+            sessionStorage.removeItem('token_admin');
+            tokenAcceso = null;
+            location.reload();
+        }
+
+        // CARGAR INVESTIGACIONES (Público)
         async function cargarInvestigaciones() {
             try {
-                const respuesta = await fetch(API_URL);
+                const respuesta = await fetch(`${API_BASE}/investigaciones/`);
                 const datos = await respuesta.json();
                 const contenedor = document.getElementById('lista-investigaciones');
                 
@@ -89,26 +159,7 @@
             }
         }
 
-        // Enviar la petición DELETE a la API
-        async function eliminarInvestigacion(id) {
-            if (confirm('¿Estás seguro de que deseas eliminar permanentemente esta investigación?')) {
-                try {
-                    const respuesta = await fetch(`${API_URL}${id}`, {
-                        method: 'DELETE'
-                    });
-
-                    if (respuesta.ok) {
-                        cargarInvestigaciones();
-                    } else {
-                        alert('No se pudo eliminar la investigación');
-                    }
-                } catch (error) {
-                    console.error("Error al eliminar:", error);
-                }
-            }
-        }
-
-        // Capturar formulario y enviar mediante POST con FormData
+        // CREAR INVESTIGACIÓN (ENVÍA TOKEN EN EL HEADER)
         document.getElementById('formulario-investigacion').addEventListener('submit', async (e) => {
             e.preventDefault();
 
@@ -124,8 +175,9 @@
             }
 
             try {
-                const respuesta = await fetch(API_URL, {
+                const respuesta = await fetch(`${API_BASE}/investigaciones/`, {
                     method: 'POST',
+                    headers: { 'Authorization': `Bearer ${tokenAcceso}` },
                     body: formData 
                 });
 
@@ -133,6 +185,9 @@
                     document.getElementById('formulario-investigacion').reset();
                     cargarInvestigaciones();
                     alert('Investigación subida con éxito');
+                } else if (respuesta.status === 401) {
+                    alert('Sesión expirada o no autorizada. Por favor vuelve a ingresar.');
+                    cerrarSesion();
                 } else {
                     alert('Hubo un error al guardar la investigación');
                 }
@@ -141,8 +196,28 @@
             }
         });
 
-        // Carga inicial
-        cargarInvestigaciones();
+        // ELIMINAR INVESTIGACIÓN (ENVÍA TOKEN EN EL HEADER)
+        async function eliminarInvestigacion(id) {
+            if (confirm('¿Estás seguro de que deseas eliminar permanentemente esta investigación?')) {
+                try {
+                    const respuesta = await fetch(`${API_BASE}/investigaciones/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${tokenAcceso}` }
+                    });
+
+                    if (respuesta.ok) {
+                        cargarInvestigaciones();
+                    } else if (respuesta.status === 401) {
+                        alert('Sesión expirada o no autorizada');
+                        cerrarSesion();
+                    } else {
+                        alert('No se pudo eliminar la investigación');
+                    }
+                } catch (error) {
+                    console.error("Error al eliminar:", error);
+                }
+            }
+        }
     </script>
 </body>
 </html>
